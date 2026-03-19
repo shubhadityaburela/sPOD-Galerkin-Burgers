@@ -8,7 +8,8 @@ from matplotlib import ticker
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.fft import fftfreq
 
-matplotlib.use("TkAgg")
+import matplotlib
+matplotlib.use('TkAgg')
 
 plt.rcParams.update({
     "text.usetex": True,
@@ -28,7 +29,7 @@ plt.rc('ytick', labelsize=VERY_SMALL_SIZE)  # fontsize of the tick labels
 plt.rc('legend', fontsize=SMALL_SIZE)  # legend fontsize
 plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
-cmap = 'YlOrRd'
+cmap = 'hot'
 
 
 def plot_luminosity_1d(luminosity, time_window_length, plot_at_all=False):
@@ -48,7 +49,6 @@ def plot_luminosity_1d(luminosity, time_window_length, plot_at_all=False):
 
 
 def plot_fft_luminosity(luminosity_fft, Nt, dt, plot_at_all=False):
-
     # Frequency bins
     # Convert to KHz
     xf = fftfreq(Nt, dt)[:Nt // 2] / 1000
@@ -73,9 +73,7 @@ def plot_fft_luminosity(luminosity_fft, Nt, dt, plot_at_all=False):
     return xf, amp
 
 
-
 def plot_fft_pressure(pressure_freq, pressure_amp, probe_pos, desired_probe_pos, freq_cut_off):
-
     probe_pos_idx = np.argmin(np.abs(probe_pos - desired_probe_pos))
 
     # Convert to KHz
@@ -103,14 +101,13 @@ def plot_fft_pressure(pressure_freq, pressure_amp, probe_pos, desired_probe_pos,
     return freq, ampl
 
 
-
-def plot_sPOD_1D_frames(Q_sPOD, theta, t, trim_first_few, time_window_length):
+def plot_sPOD_1D_frames(Q_sPOD, theta, t, trim_first_few, time_window_length, immpath):
     Q = Q_sPOD[0]
     T1Q1 = Q_sPOD[1]
     T2Q2 = Q_sPOD[2]
     T3Q3 = Q_sPOD[3]
     T4Q4 = Q_sPOD[4]
-    Q1 = Q_sPOD[5]
+    E = Q_sPOD[5]
     Q2 = Q_sPOD[6]
     Q3 = Q_sPOD[7]
     Q4 = Q_sPOD[8]
@@ -122,76 +119,87 @@ def plot_sPOD_1D_frames(Q_sPOD, theta, t, trim_first_few, time_window_length):
 
     qmin = np.min(Q)
     qmax = np.max(Q)
-    fig, axs = plt.subplots(2, 5, num=3, sharey=True, figsize=(20, 16))
+    fig, axs = plt.subplots(2, 6, num=3, sharey=True, figsize=(24, 16))
     bottom, top = 0.15, 0.9
     left, right = 0.1, 0.85
     fig.subplots_adjust(top=top, bottom=bottom, left=left, right=right, hspace=0.3, wspace=0.2)
     # Original
     im = axs[0, 0].pcolormesh(theta_grid, t_grid, Q, cmap=cmap, vmin=qmin, vmax=qmax)
     axs[0, 0].axis('auto')
-    axs[0, 0].set_xlabel(r"$Q$")
+    axs[0, 0].set_title(r"$Q$")
     axs[0, 0].set_yticks([], [])
     axs[0, 0].set_xticks([], [])
     # Reconstruction
     axs[1, 0].pcolormesh(theta_grid, t_grid, Qtilde, cmap=cmap, vmin=qmin, vmax=qmax)
     axs[1, 0].axis('auto')
-    axs[1, 0].set_xlabel(r"$\tilde{Q}$")
+    axs[1, 0].set_title(r"$\tilde{Q}$")
     axs[1, 0].set_yticks([], [])
     axs[1, 0].set_xticks([], [])
 
     # 1. 1st Shifted frame
     axs[0, 1].pcolormesh(theta_grid, t_grid, T1Q1, cmap=cmap, vmin=qmin, vmax=qmax)
     axs[0, 1].axis('auto')
-    axs[0, 1].set_xlabel(r"$T^1Q^1$")
+    axs[0, 1].set_title(r"$T^1Q^1$")
     axs[0, 1].set_yticks([], [])
     axs[0, 1].set_xticks([], [])
     # 1. 1st Unshifted frame
-    axs[1, 1].pcolormesh(theta_grid, t_grid, Q1, cmap=cmap, vmin=qmin, vmax=qmax)
+    axs[1, 1].pcolormesh(theta_grid, t_grid, T1Q1, cmap=cmap, vmin=qmin, vmax=qmax)
     axs[1, 1].axis('auto')
-    axs[1, 1].set_xlabel(r"$Q^1$")
+    axs[1, 1].set_title(r"$Q^1$")
     axs[1, 1].set_yticks([], [])
     axs[1, 1].set_xticks([], [])
 
     # 2. 2nd Shifted frame
     axs[0, 2].pcolormesh(theta_grid, t_grid, T2Q2, cmap=cmap, vmin=qmin, vmax=qmax)
     axs[0, 2].axis('auto')
-    axs[0, 2].set_xlabel(r"$T^2Q^2$")
+    axs[0, 2].set_title(r"$T^2Q^2$")
     axs[0, 2].set_yticks([], [])
     axs[0, 2].set_xticks([], [])
     # 2. 2nd Unshifted frame
     axs[1, 2].pcolormesh(theta_grid, t_grid, Q2, cmap=cmap, vmin=qmin, vmax=qmax)
     axs[1, 2].axis('auto')
-    axs[1, 2].set_xlabel(r"$Q^2$")
+    axs[1, 2].set_title(r"$Q^2$")
     axs[1, 2].set_yticks([], [])
     axs[1, 2].set_xticks([], [])
 
     # 3. 3rd Shifted frame
     axs[0, 3].pcolormesh(theta_grid, t_grid, T3Q3, cmap=cmap, vmin=qmin, vmax=qmax)
     axs[0, 3].axis('auto')
-    axs[0, 3].set_xlabel(r"$T^3Q^3$")
+    axs[0, 3].set_title(r"$T^3Q^3$")
     axs[0, 3].set_yticks([], [])
     axs[0, 3].set_xticks([], [])
     # 3. 3rd Unshifted frame
     axs[1, 3].pcolormesh(theta_grid, t_grid, Q3, cmap=cmap, vmin=qmin, vmax=qmax)
     axs[1, 3].axis('auto')
-    axs[1, 3].set_xlabel(r"$Q^3$")
+    axs[1, 3].set_title(r"$Q^3$")
     axs[1, 3].set_yticks([], [])
     axs[1, 3].set_xticks([], [])
 
     # 4. 4th Shifted frame
     axs[0, 4].pcolormesh(theta_grid, t_grid, T4Q4, cmap=cmap, vmin=qmin, vmax=qmax)
     axs[0, 4].axis('auto')
-    axs[0, 4].set_xlabel(r"$T^4Q^4$")
+    axs[0, 4].set_title(r"$T^4Q^4$")
     axs[0, 4].set_yticks([], [])
     axs[0, 4].set_xticks([], [])
     # 4. 4th Unshifted frame
     axs[1, 4].pcolormesh(theta_grid, t_grid, Q4, cmap=cmap, vmin=qmin, vmax=qmax)
     axs[1, 4].axis('auto')
-    axs[1, 4].set_xlabel(r"$Q^4$")
+    axs[1, 4].set_title(r"$Q^4$")
     axs[1, 4].set_yticks([], [])
     axs[1, 4].set_xticks([], [])
 
-
+    # 5. Noise frame
+    axs[0, 5].pcolormesh(theta_grid, t_grid, E, cmap=cmap, vmin=qmin, vmax=qmax)
+    axs[0, 5].axis('auto')
+    axs[0, 5].set_title(r"$E$")
+    axs[0, 5].set_yticks([], [])
+    axs[0, 5].set_xticks([], [])
+    # 5. Noise frame
+    axs[1, 5].pcolormesh(theta_grid, t_grid, E, cmap=cmap, vmin=qmin, vmax=qmax)
+    axs[1, 5].axis('auto')
+    axs[1, 5].set_title(r"$E$")
+    axs[1, 5].set_yticks([], [])
+    axs[1, 5].set_xticks([], [])
 
     cbar_ax = fig.add_axes([0.90, bottom, 0.01, top - bottom])
     fig.colorbar(im, cax=cbar_ax)
@@ -199,7 +207,83 @@ def plot_sPOD_1D_frames(Q_sPOD, theta, t, trim_first_few, time_window_length):
     fig.supylabel(r"time $t$")
     fig.supxlabel(r"space $x$")
 
-    plt.show()
+    out_file = os.path.join(immpath, f"sPOD_decomposition.png")
+    fig.savefig(out_file, dpi=300, transparent=True)
+
+    # qmin = np.min(Q)
+    # qmax = np.max(Q)
+    #
+    # VERY_SMALL_SIZE = 8
+    # SMALL_SIZE = 10
+    # MEDIUM_SIZE = 10
+    # BIGGER_SIZE = 10
+    #
+    # plt.rc('font', size=SMALL_SIZE)  # controls default text sizes
+    # plt.rc('axes', titlesize=MEDIUM_SIZE)  # fontsize of the axes title
+    # plt.rc('axes', labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
+    # plt.rc('xtick', labelsize=VERY_SMALL_SIZE)  # fontsize of the tick labels
+    # plt.rc('ytick', labelsize=VERY_SMALL_SIZE)  # fontsize of the tick labels
+    # plt.rc('legend', fontsize=SMALL_SIZE)  # legend fontsize
+    # plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+    #
+    # fig, axs = plt.subplots(1, 1, num=1, sharey=True, figsize=(4, 5))
+    # bottom, top = 0.15, 0.9
+    # left, right = 0.1, 0.85
+    # fig.subplots_adjust(top=top, bottom=bottom, left=left, right=right, hspace=0.3, wspace=0.2)
+    # im = axs.pcolormesh(theta_grid, t_grid, T1Q1, cmap=cmap, vmin=qmin, vmax=qmax)
+    # axs.axis('auto')
+    # axs.set_yticks([], [])
+    # axs.set_xticks([], [])
+    # out_file = os.path.join(immpath, f"sPOD_decomposition_1.png")
+    # fig.savefig(out_file, dpi=300, transparent=True)
+    #
+    # fig, axs = plt.subplots(1, 1, num=2, sharey=True, figsize=(4, 5))
+    # bottom, top = 0.15, 0.9
+    # left, right = 0.1, 0.85
+    # fig.subplots_adjust(top=top, bottom=bottom, left=left, right=right, hspace=0.3, wspace=0.2)
+    # im = axs.pcolormesh(theta_grid, t_grid, T2Q2, cmap=cmap, vmin=qmin, vmax=qmax)
+    # axs.axis('auto')
+    # axs.set_yticks([], [])
+    # axs.set_xticks([], [])
+    # out_file = os.path.join(immpath, f"sPOD_decomposition_2.png")
+    # fig.savefig(out_file, dpi=300, transparent=True)
+    #
+    # fig, axs = plt.subplots(1, 1, num=3, sharey=True, figsize=(4, 5))
+    # bottom, top = 0.15, 0.9
+    # left, right = 0.1, 0.85
+    # fig.subplots_adjust(top=top, bottom=bottom, left=left, right=right, hspace=0.3, wspace=0.2)
+    # im = axs.pcolormesh(theta_grid, t_grid, T3Q3, cmap=cmap, vmin=qmin, vmax=qmax)
+    # axs.axis('auto')
+    # axs.set_yticks([], [])
+    # axs.set_xticks([], [])
+    # out_file = os.path.join(immpath, f"sPOD_decomposition_3.png")
+    # fig.savefig(out_file, dpi=300, transparent=True)
+
+    # s_1 = np.linalg.svd(Q, compute_uv=False)
+    # s_2 = np.linalg.svd(Q2, compute_uv=False)
+    # s_3 = np.linalg.svd(Q3, compute_uv=False)
+    # s_1 = s_1[:100]
+    # s_2 = s_2[:100]
+    # s_3 = s_3[:100]
+    # s_norm_1 = s_1 / s_1[0]  # normalize by largest singular value
+    # s_norm_2 = s_2 / s_2[0]  # normalize by largest singular value
+    # s_norm_3 = s_3 / s_3[0]  # normalize by largest singular value
+    # idx = np.arange(1, len(s_norm_1) + 1)
+    #
+    # fig, axs = plt.subplots(1, 1, num=4, sharey=True, figsize=(4, 5))
+    # bottom, top = 0.15, 0.9
+    # left, right = 0.1, 0.85
+    # fig.subplots_adjust(top=top, bottom=bottom, left=left, right=right, hspace=0.3, wspace=0.2)
+    # axs.semilogy(idx, s_norm_1, marker="+", linestyle='None', markersize=3, label=r"$Q$")
+    # axs.semilogy(idx, s_norm_2, marker="o", linestyle='None', markersize=3, label=r"$T^1Q^1$")
+    # axs.semilogy(idx, s_norm_3, marker="x", linestyle='None', markersize=3, label=r"$T^2Q^2$")
+    # # axs.set_ylabel(r"$\sigma_k/\sigma_0$")
+    # # axs.set_title("Singular value decay")
+    # axs.legend(fontsize=10)
+    # axs.grid(True)
+    # out_file = os.path.join(immpath, "MOR4.png")
+    # fig.savefig(out_file, dpi=300, transparent=True)
+
 
 
 def PlotFOM2D(SnapMat, R, theta, t, plot_every=9, plot_at_all=False):
@@ -239,7 +323,6 @@ def PlotFOM2D(SnapMat, R, theta, t, plot_every=9, plot_at_all=False):
 
         plt.ioff()  # optional: turn interactive mode off
         plt.show()  # show final frame (blocks)
-
 
 
 def PlotPolar2D(Q, T1Q1, T2Q2, T3Q3, R, theta, t, plot_every=9, plot_at_all=False):

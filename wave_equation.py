@@ -10,7 +10,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
 import matplotlib
-matplotlib.use('TkAgg')
 
 
 def gaussian_ic(x, x0, sigma):

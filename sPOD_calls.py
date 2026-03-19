@@ -15,7 +15,8 @@ from scipy.signal import savgol_filter
 
 
 def sPOD_1D(Q, theta, t, L_thet, Ntheta, shifts_left, shifts_right, trim_first_few,
-            time_window_length, sPOD_type, spod_iter=100, shifts_right_right=None):
+            time_window_length, mu, tau, omega, gamma, nmodes, spod_iter, shifts_right_right=None):
+
     # Trim the data according to the time_window_length
     Q_trim = Q[:, trim_first_few:time_window_length].copy()
     t_trim = t[trim_first_few:time_window_length].copy()
@@ -31,184 +32,149 @@ def sPOD_1D(Q, theta, t, L_thet, Ntheta, shifts_left, shifts_right, trim_first_f
     Q_trim = (Q_trim - np.min(Q_trim)) / (np.max(Q_trim) - np.min(Q_trim))
     Q_trim = savgol_filter(Q_trim, window_length=100, polyorder=3, axis=0)
 
-    # plt.ion()
-    # fig, ax = plt.subplots(1, 1)
-    # for i in range(Q_trim.shape[1]):
-    #     ax.plot(theta, Q_trim[:, i])
-    #     ax.plot(theta, Q_trim_smooth[:, i])
-    #     ax.set_ylim(0.0, 1.0)
-    #     plt.draw()
-    #     plt.pause(0.50)
-    #     ax.cla()
-    # exit()
-
     dtheta = theta[1] - theta[0]
     L_theta = [L_thet]
     data_shape = [Ntheta, 1, 1, Nt]
     Q_tmp = np.reshape(Q_trim, data_shape)
 
-    if sPOD_type == "Legacy":
-        print("Choosing Legacy sPOD.............")
-        trafo_1 = transforms(data_shape, L_theta, shifts=np.zeros_like(shifts_right_trim),
-                             trafo_type="identity",
-                             dx=[dtheta],
-                             use_scipy_transform=False,
-                             use_cubic_spline=True,
-                             interp_order=5)
-        trafo_2 = transforms(data_shape, L_theta, shifts=shifts_left_trim,
-                             dx=[dtheta],
-                             use_scipy_transform=False,
-                             use_cubic_spline=True,
-                             interp_order=5)
-        trafo_3 = transforms(data_shape, L_theta, shifts=shifts_right_trim,
+    trafo_1 = transforms(data_shape, L_theta, shifts=shifts_left_trim,
+                         dx=[dtheta],
+                         use_scipy_transform=False,
+                         use_cubic_spline=True,
+                         interp_order=5)
+    trafo_2 = transforms(data_shape, L_theta, shifts=shifts_right_trim,
+                         dx=[dtheta],
+                         use_scipy_transform=False,
+                         use_cubic_spline=True,
+                         interp_order=5)
+
+    if shifts_right_right is not None:
+        trafo_3 = transforms(data_shape, L_theta, shifts=shifts_right_right_trim,
                              dx=[dtheta],
                              use_scipy_transform=False,
                              use_cubic_spline=True,
                              interp_order=5)
 
-        interp_err = give_interpolation_error(Q_tmp, trafo_2)
-        print("Transformation interpolation error =  %4.4e " % interp_err)
+    interp_err = give_interpolation_error(Q_tmp, trafo_2)
+    print("Transformation interpolation error =  %4.4e " % interp_err)
 
+    if shifts_right_right is None:
+        trafos = [trafo_1, trafo_2]
+        qmat = np.reshape(Q_trim, [-1, Nt])
+        [N, M] = np.shape(qmat)
+
+        # Constant parameters
+        alpha0 = N * M / (4 * np.sum(np.abs(qmat))) * alpha  # Parameter for data fitting dual
+        beta0 = N * M / (4 * np.sum(np.abs(qmat))) * beta  # Parameter for nonlinearity equality dual
+        lamda0 = [lamda[0], lamda[1]]  # Parameter for nuclear norm weighing of the traveling frames
+        gamma0 = [gamma[0], gamma[1]]  # TV regularization of traveling wave time amplitudes
+        tau0 = tau
+        eta0 = eta
+        omega0 = omega
+        dt = t[1] - t[0]
+
+        ret = shifted_POD_nl(Q_trim, trafos, nmodes_max=np.array([nmodes[0], nmodes[1], nmodes[2]]), eps=1e-16,
+                             Niter=spod_iter, use_rSVD=True,
+                             mu=mu0, tau=tau0, omega=omega0, gamma=gamma0, dt=dt, dtol=1e-5)
+
+        sPOD_frames, Qtilde, Q_nl, E, ranks = ret.frames, ret.data_approx, ret.nonlinear_matrix, ret.noise_matrix, ret.ranks
+
+        Q2 = sPOD_frames[0].build_field()
+        Q3 = sPOD_frames[1].build_field()
+
+        T1Q1 = Q_nl.copy()
+        T2Q2 = trafo_1.apply(Q2)
+        T3Q3 = trafo_2.apply(Q3)
+
+        Q4 = np.zeros_like(Q3)
+        T4Q4 = np.zeros_like(T3Q3)
+    else:
         trafos = [trafo_1, trafo_2, trafo_3]
         qmat = np.reshape(Q_trim, [-1, Nt])
         [N, M] = np.shape(qmat)
-        mu0 = N * M / (4 * np.sum(np.abs(qmat))) * 0.0015
-        lambd0 = 1 / np.sqrt(np.maximum(M, N)) * 1.5
-        ret = shifted_rPCA(Q_trim, trafos, nmodes_max=np.array([5, 3, 3]), eps=1e-16, Niter=spod_iter, use_rSVD=True,
-                           mu=mu0, lambd=lambd0, dtol=1e-5, total_variation_iterations=100)
-        sPOD_frames, Qtilde, rel_err, ranks = ret.frames, ret.data_approx, ret.rel_err_hist, ret.ranks
+        mu0 = N * M / (4 * np.sum(np.abs(qmat))) * mu
+        tau0 = 1 / np.sqrt(np.maximum(M, N)) * tau  # Tune this for playing around
+        dt = t[1] - t[0]
+        gamma0 = [gamma[0], gamma[1], gamma[2]]  # Tune this for playing around
 
-        Q1 = sPOD_frames[0].build_field()
-        Q2 = sPOD_frames[1].build_field()
-        Q3 = sPOD_frames[2].build_field()
+        ret = shifted_POD_nl(Q_trim, trafos, nmodes_max=np.array([nmodes[0], nmodes[1], nmodes[2]]),
+                             eps=1e-16, Niter=spod_iter,
+                             use_rSVD=True,
+                             mu=mu0, tau=tau0, gamma=gamma0, dt=dt, dtol=1e-5)
 
-        T1Q1 = trafo_1.apply(Q1)
-        T2Q2 = trafo_2.apply(Q2)
-        T3Q3 = trafo_3.apply(Q3)
+        sPOD_frames, Qtilde, Q_nl, ranks = ret.frames, ret.data_approx, ret.nonlinear_matrix, ret.ranks
 
-        total_ranks = int(np.sum(ranks) + 2)
-        U, S, VT = randomized_svd(qmat, n_components=total_ranks, random_state=42)
-        qmat_POD = (U @ np.diag(S)) @ VT
-        print(
-            f"POD relative error with {total_ranks} modes is {np.linalg.norm(qmat - qmat_POD) / np.linalg.norm(qmat)}")
+        Q1 = Q_nl.copy()
+        Q2 = sPOD_frames[0].build_field()
+        Q3 = sPOD_frames[1].build_field()
+        Q4 = sPOD_frames[2].build_field()
 
-    else:
-        trafo_1 = transforms(data_shape, L_theta, shifts=shifts_left_trim,
-                             dx=[dtheta],
-                             use_scipy_transform=False,
-                             use_cubic_spline=True,
-                             interp_order=5)
-        trafo_2 = transforms(data_shape, L_theta, shifts=shifts_right_trim,
-                             dx=[dtheta],
-                             use_scipy_transform=False,
-                             use_cubic_spline=True,
-                             interp_order=5)
+        T1Q1 = Q1.copy()
+        T2Q2 = trafo_1.apply(Q2)
+        T3Q3 = trafo_2.apply(Q3)
+        T4Q4 = trafo_3.apply(Q4)
 
-        if shifts_right_right is not None:
-            trafo_3 = transforms(data_shape, L_theta, shifts=shifts_right_right_trim,
-                                 dx=[dtheta],
-                                 use_scipy_transform=False,
-                                 use_cubic_spline=True,
-                                 interp_order=5)
+    Qtilde = Qtilde + Q_nl
 
-        interp_err = give_interpolation_error(Q_tmp, trafo_2)
-        print("Transformation interpolation error =  %4.4e " % interp_err)
+    total_ranks = int(np.sum(ranks) + 2)
+    U, S, VT = randomized_svd(qmat, n_components=total_ranks, random_state=42)
+    qmat_POD = (U @ np.diag(S)) @ VT
+    print(
+        f"POD relative error with {total_ranks} modes is {np.linalg.norm(qmat - qmat_POD) / np.linalg.norm(qmat)}")
 
-        # fig, axs = plt.subplots(1, 3, num=3, sharey=True, figsize=(12, 5))
-        # bottom, top = 0.15, 0.9
-        # left, right = 0.1, 0.85
-        # fig.subplots_adjust(top=top, bottom=bottom, left=left, right=right, hspace=0.1, wspace=0.2)
-        # # Original
-        # axs[0].pcolormesh(Q_trim.T)
-        # axs[0].axis('auto')
-        # axs[0].set_yticks([], [])
-        # axs[0].set_xticks([], [])
-        # axs[0].set_title(r"$Q$")
-        #
-        # axs[1].pcolormesh(np.reshape(trafo_2.reverse(Q_tmp), newshape=[-1, Nt]).T)
-        # axs[1].axis('auto')
-        # axs[1].set_yticks([], [])
-        # axs[1].set_xticks([], [])
-        # axs[1].set_title(r"$\mathcal{T}^{-1}_2 Q$")
-        #
-        # axs[2].pcolormesh(np.reshape(trafo_2.apply(trafo_2.reverse(Q_tmp)), newshape=[-1, Nt]).T)
-        # axs[2].axis('auto')
-        # axs[2].set_yticks([], [])
-        # axs[2].set_xticks([], [])
-        # axs[2].set_title(r"$\mathcal{T}_2 \mathcal{T}^{-1}_2 Q$")
-        # plt.show()
-        # exit()
 
-        if shifts_right_right is None:
-            # 2CR : mu0 factor = 0.0015, tau0 factor = 0.3, gamma0 = [dt^2, dt^2], nmodes_max = [3, 3]
-            # 2CRT : mu0 factor = 0.0015, tau0 factor = 0.3, gamma0 = [10^2 * dt^2, 10^6 * dt^2], nmodes_max = [3, 3]
 
-            trafos = [trafo_1, trafo_2]
-            qmat = np.reshape(Q_trim, [-1, Nt])
-            [N, M] = np.shape(qmat)
-            mu0 = N * M / (4 * np.sum(np.abs(qmat))) * 0.0015
-            tau0 = 1 / np.sqrt(np.maximum(M, N)) * 0.3  # Tune this for playing around
-            dt = t[1] - t[0]
-            gamma0 = [dt ** 2, dt ** 2]  # Tune this for playing around
 
-            ret = shifted_POD_nl(Q_trim, trafos, nmodes_max=np.array([3, 3]), eps=1e-16, Niter=spod_iter, use_rSVD=True,
-                                 mu=mu0, tau=tau0, gamma=gamma0, dt=dt, dtol=1e-5)
-
-            sPOD_frames, Qtilde, Q_nl, ranks = ret.frames, ret.data_approx, ret.nonlinear_matrix, ret.ranks
-
-            Q1 = Q_nl.copy()
-            Q2 = sPOD_frames[0].build_field()
-            Q3 = sPOD_frames[1].build_field()
-
-            T1Q1 = Q1.copy()
-            T2Q2 = trafo_1.apply(Q2)
-            T3Q3 = trafo_2.apply(Q3)
-
-            Q4 = np.zeros_like(Q3)
-            T4Q4 = np.zeros_like(T3Q3)
-        else:
-            trafos = [trafo_1, trafo_2, trafo_3]
-            qmat = np.reshape(Q_trim, [-1, Nt])
-            [N, M] = np.shape(qmat)
-            mu0 = N * M / (4 * np.sum(np.abs(qmat))) * 0.009
-            tau0 = 1 / np.sqrt(np.maximum(M, N)) * 0.30  # Tune this for playing around
-            dt = t[1] - t[0]
-            gamma0 = [1000 * dt ** 2, 1.0 * dt ** 2, 1.0 * dt ** 2]  # Tune this for playing around
-
-            ret = shifted_POD_nl(Q_trim, trafos, nmodes_max=np.array([3, 1, 1]), eps=1e-16, Niter=spod_iter,
-                                 use_rSVD=True,
-                                 mu=mu0, tau=tau0, gamma=gamma0, dt=dt, dtol=1e-5)
-
-            sPOD_frames, Qtilde, Q_nl, ranks = ret.frames, ret.data_approx, ret.nonlinear_matrix, ret.ranks
-
-            Q1 = Q_nl.copy()
-            Q2 = sPOD_frames[0].build_field()
-            Q3 = sPOD_frames[1].build_field()
-            Q4 = sPOD_frames[2].build_field()
-
-            T1Q1 = Q1.copy()
-            T2Q2 = trafo_1.apply(Q2)
-            T3Q3 = trafo_2.apply(Q3)
-            T4Q4 = trafo_3.apply(Q4)
-
-        Qtilde = Qtilde + Q_nl
-
-        total_ranks = int(np.sum(ranks) + 2)
-        U, S, VT = randomized_svd(qmat, n_components=total_ranks, random_state=42)
-        qmat_POD = (U @ np.diag(S)) @ VT
-        print(
-            f"POD relative error with {total_ranks} modes is {np.linalg.norm(qmat - qmat_POD) / np.linalg.norm(qmat)}")
-
-    # for i in range(ranks[0]):
-    #     plt.plot(t_trim, sPOD_frames[0].modal_system['VT'][i], label=f"{i}")
-    # plt.legend()
+    # s_1 = np.linalg.svd(Q_trim, compute_uv=False)
+    # s_2 = np.linalg.svd(Q1, compute_uv=False)
+    # s_3 = np.linalg.svd(Q2, compute_uv=False)
+    # s_4 = np.linalg.svd(Q3, compute_uv=False)
+    # s_1 = s_1[:100]
+    # s_2 = s_2[:100]
+    # s_3 = s_3[:100]
+    # s_4 = s_4[:100]
+    #
+    # s_norm_1 = s_1 / s_1[0]  # normalize by largest singular value
+    # s_norm_2 = s_2 / s_2[0]  # normalize by largest singular value
+    # s_norm_3 = s_3 / s_3[0]  # normalize by largest singular value
+    # s_norm_4 = s_4 / s_4[0]  # normalize by largest singular value
+    #
+    # idx = np.arange(1, len(s_norm_1) + 1)
+    #
+    # fig, ax = plt.subplots(figsize=(6, 4))
+    # ax.semilogy(idx, s_norm_1,
+    #             color="brown",
+    #             marker="+",
+    #             linestyle='None',
+    #             markersize=5, label="Q")
+    # ax.semilogy(idx, s_norm_2,
+    #             color="red",
+    #             marker="+",
+    #             linestyle='None',
+    #             markersize=5, label="NL")
+    # ax.semilogy(idx, s_norm_3,
+    #             color="green",
+    #             marker="+",
+    #             linestyle='None',
+    #             markersize=5, label="L1")
+    # ax.semilogy(idx, s_norm_4,
+    #             color="magenta",
+    #             marker="+",
+    #             linestyle='None',
+    #             markersize=5, label="L2")
+    # ax.set_ylabel(r"$\sigma_{k} / \sigma_{0}$")
+    #
+    # ax.set_xlabel(r"Num. of singular vals.")
+    # ax.set_title(rf"$n_\mathrm{{opt}} = {id}$")
+    # ax.grid(True, linestyle='--', alpha=0.6)
+    # ax.legend()
+    #
+    # fig.tight_layout()
     # plt.show()
-    # for i in range(ranks[1]):
-    #     plt.plot(t_trim, sPOD_frames[1].modal_system['VT'][i], label=f"{i}")
-    # plt.legend()
-    # plt.show()
+    # exit()
 
-    return [Q_trim, T1Q1, T2Q2, T3Q3, T4Q4, Q1, Q2, Q3, Q4, Qtilde]
+
+    return [Q_trim, T1Q1, T2Q2, T3Q3, T4Q4, E, Q2, Q3, Q4, Qtilde]
 
 
 def sPOD_2D(Q, theta, R, t, shifts, trim_first_few, time_window_length, Xtilde, Ytilde,

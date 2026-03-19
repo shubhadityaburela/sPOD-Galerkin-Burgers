@@ -18,10 +18,17 @@ def parse_arguments():
     p.add_argument("dir_prefix", type=str, help="Directory prefix for MATLAB files input")
     p.add_argument("which_variable", type=str, choices=["Luminosity", "Pressure", "Custom"],
                    help="Select either the luminosity or the pressure data")
-    p.add_argument("test_scenario", type=str, choices=["2CR", "2CRT", "DS2", ""],
-                   help="Input test scenario")
-    p.add_argument("sPOD_dim", type=str, choices=["1D", "2D"],
-                   help="Input the sPOD dimension")
+    p.add_argument("test_scenario", type=str, choices=["2CR", "2CRT", "DS2", ""], help="Input test scenario")
+    p.add_argument("sPOD_dim", type=str, choices=["1D", "2D"], help="Input the sPOD dimension")
+    p.add_argument("mu", type=float, help="Input the mu factor")
+    p.add_argument("tau", type=float, help="Input the tau factor")
+    p.add_argument("omega", type=float, help="Input the omega factor")
+    p.add_argument("gamma", type=float, nargs=3, help="Enter the gamma factor (frame wise)")
+    p.add_argument("nmodes_max", type=int, nargs=4, help="Enter the number of modes allowed for each frame (first "
+                                                         "value for the nonlinear and next k values for traveling "
+                                                         "frames)")
+    p.add_argument("dir_prefix_output", type=str, help="Directory prefix for Output")
+
     return p.parse_args()
 
 
@@ -50,12 +57,37 @@ def select_filename(test_scenario):
         return "BD0041.mat"
 
 
+def build_dirs(prefix, which_variable, test_scenario, sPOD_dim, mu, tau, omega, gamma, nmodes_max):
+    var_str = which_variable
+    scen_str = test_scenario
+    dim_str = sPOD_dim
+    reg_str = f"mu={mu}_tau={tau}_omega={omega}_gamma={gamma}_nmodes={nmodes_max}"
+    data_dir = os.path.join(prefix, "data", var_str, scen_str, dim_str, reg_str)
+    plot_dir = os.path.join(prefix, "plots", var_str, scen_str, dim_str, reg_str)
+    # os.makedirs(data_dir, exist_ok=True)
+    os.makedirs(plot_dir, exist_ok=True)
+    return data_dir, plot_dir
+
+
 if __name__ == "__main__":
     args = parse_arguments()
 
     dir = args.dir_prefix
     variable_folder = select_variable(args.which_variable)
     file_name = select_filename(args.test_scenario)
+
+    # Instantiate the arguments
+    mu = args.mu
+    tau = args.tau
+    gamma = args.gamma
+    omega = args.omega
+    nmodes_max = args.nmodes_max
+
+    print(f"mu={mu}, tau={tau}, omega={omega}, gamma={gamma}, nmodes_max={nmodes_max}")
+
+    # Create the desired directories
+    data_dir, plot_dir = build_dirs(args.dir_prefix_output, args.which_variable, args.test_scenario,
+                                    args.sPOD_dim, mu, tau, omega, gamma, nmodes_max)
 
     if args.which_variable == "Luminosity":
         # Read the MATLAB files
@@ -127,7 +159,7 @@ if __name__ == "__main__":
         # Applying sPOD on the 1D snapshot data
         print("#############################################")
         print("sPOD run started....")
-        time_window_length = 500
+        time_window_length = 250
         trim_first_few = 0
 
         if args.sPOD_dim == "1D":
@@ -141,13 +173,13 @@ if __name__ == "__main__":
                              len(RDC_data.theta), -shift_left, shift_right,
                              trim_first_few=trim_first_few,
                              time_window_length=time_window_length,
-                             sPOD_type="New",
-                             spod_iter=100,
+                             mu=mu, tau=tau, omega=omega, gamma=gamma, nmodes=nmodes_max,
+                             spod_iter=200,
                              shifts_right_right=shift_right_right
                              )
 
             # Plot the sPOD results for the 1D data
-            plot_sPOD_1D_frames(Q_sPOD, np.squeeze(RDC_data.theta), t, trim_first_few, time_window_length)
+            plot_sPOD_1D_frames(Q_sPOD, np.squeeze(RDC_data.theta), t, trim_first_few, time_window_length, plot_dir)
         else:
             shifts = np.zeros((2, 2, len(t)))
             shifts[0, 0, :] = 0.0  # Radial direction (Frame 1)
@@ -207,8 +239,8 @@ if __name__ == "__main__":
                          len(X), -shift_left, shift_right,
                          trim_first_few=trim_first_few,
                          time_window_length=time_window_length,
-                         sPOD_type="New",
+                         mu=mu, tau=tau, gamma=gamma, nmodes=nmodes_max,
                          spod_iter=30)
 
         # Plot the sPOD results for the 1D data
-        plot_sPOD_1D_frames(Q_sPOD, X, T, trim_first_few, time_window_length)
+        plot_sPOD_1D_frames(Q_sPOD, X, T, trim_first_few, time_window_length, plot_dir)
