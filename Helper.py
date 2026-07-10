@@ -14,7 +14,7 @@ def window_cut_pressure_data(t_start, t_end, pressure_sensor_array, t):
 
 def extract_matrix_from_jpg():
     # 1. Load your pre-cropped image
-    image_path = 'cropped.jpg'
+    image_path = 'Random/cropped.jpg'
     img = cv2.imread(image_path)
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
@@ -72,7 +72,7 @@ def extract_matrix_from_jpg():
 
 
 def extract_matrix_from_matlab_file():
-    mat_path = 'myles_data.mat'
+    mat_path = 'Random/myles_data.mat'
 
     raw_numbers = []
 
