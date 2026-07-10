@@ -4,7 +4,6 @@ import sys
 
 from sklearn.utils.extmath import randomized_svd
 
-from Helper import retain_two_peaks
 from Plots import PlotFOM2D, PlotPolar2D
 
 sys.path.append('./sPOD/lib/')
@@ -15,7 +14,8 @@ from scipy.signal import savgol_filter
 
 
 def sPOD_1D(Q, theta, t, L_thet, Ntheta, shifts_left, shifts_right, trim_first_few,
-            time_window_length, mu, tau, omega, gamma, nmodes, spod_iter, shifts_right_right=None):
+            time_window_length, alpha, beta, lamda, gamma, tau, eta, omega, nmodes,
+            spod_iter, shifts_right_right=None):
 
     # Trim the data according to the time_window_length
     Q_trim = Q[:, trim_first_few:time_window_length].copy()
@@ -69,13 +69,14 @@ def sPOD_1D(Q, theta, t, L_thet, Ntheta, shifts_left, shifts_right, trim_first_f
         lamda0 = [lamda[0], lamda[1]]  # Parameter for nuclear norm weighing of the traveling frames
         gamma0 = [gamma[0], gamma[1]]  # TV regularization of traveling wave time amplitudes
         tau0 = tau
-        eta0 = eta
+        eta0 = 1 / np.sqrt(np.maximum(M, N)) * eta
         omega0 = omega
         dt = t[1] - t[0]
 
         ret = shifted_POD_nl(Q_trim, trafos, nmodes_max=np.array([nmodes[0], nmodes[1], nmodes[2]]), eps=1e-16,
                              Niter=spod_iter, use_rSVD=True,
-                             mu=mu0, tau=tau0, omega=omega0, gamma=gamma0, dt=dt, dtol=1e-5)
+                             alpha=alpha0, beta=beta0, lamda=lamda0, gamma=gamma0, tau=tau0, eta=eta0, omega=omega0,
+                             dt=dt, dtol=1e-5)
 
         sPOD_frames, Qtilde, Q_nl, E, ranks = ret.frames, ret.data_approx, ret.nonlinear_matrix, ret.noise_matrix, ret.ranks
 
@@ -114,8 +115,8 @@ def sPOD_1D(Q, theta, t, L_thet, Ntheta, shifts_left, shifts_right, trim_first_f
         T3Q3 = trafo_2.apply(Q3)
         T4Q4 = trafo_3.apply(Q4)
 
-    Qtilde = Qtilde + Q_nl
 
+    Qtilde = Qtilde + Q_nl
     total_ranks = int(np.sum(ranks) + 2)
     U, S, VT = randomized_svd(qmat, n_components=total_ranks, random_state=42)
     qmat_POD = (U @ np.diag(S)) @ VT
@@ -124,55 +125,63 @@ def sPOD_1D(Q, theta, t, L_thet, Ntheta, shifts_left, shifts_right, trim_first_f
 
 
 
+    # plt.ion()
+    # fig, ax = plt.subplots(1, 1)
+    # for i in range(Q_trim.shape[1]):
+    #     ax.plot(theta, T1Q1[:, i])
+    #     ax.set_ylim(-1.0, 1.0)
+    #     plt.draw()
+    #     plt.pause(0.50)
+    #     ax.cla()
 
-    # s_1 = np.linalg.svd(Q_trim, compute_uv=False)
-    # s_2 = np.linalg.svd(Q1, compute_uv=False)
-    # s_3 = np.linalg.svd(Q2, compute_uv=False)
-    # s_4 = np.linalg.svd(Q3, compute_uv=False)
-    # s_1 = s_1[:100]
-    # s_2 = s_2[:100]
-    # s_3 = s_3[:100]
-    # s_4 = s_4[:100]
-    #
-    # s_norm_1 = s_1 / s_1[0]  # normalize by largest singular value
-    # s_norm_2 = s_2 / s_2[0]  # normalize by largest singular value
-    # s_norm_3 = s_3 / s_3[0]  # normalize by largest singular value
-    # s_norm_4 = s_4 / s_4[0]  # normalize by largest singular value
-    #
-    # idx = np.arange(1, len(s_norm_1) + 1)
-    #
-    # fig, ax = plt.subplots(figsize=(6, 4))
-    # ax.semilogy(idx, s_norm_1,
-    #             color="brown",
-    #             marker="+",
-    #             linestyle='None',
-    #             markersize=5, label="Q")
-    # ax.semilogy(idx, s_norm_2,
-    #             color="red",
-    #             marker="+",
-    #             linestyle='None',
-    #             markersize=5, label="NL")
-    # ax.semilogy(idx, s_norm_3,
-    #             color="green",
-    #             marker="+",
-    #             linestyle='None',
-    #             markersize=5, label="L1")
-    # ax.semilogy(idx, s_norm_4,
-    #             color="magenta",
-    #             marker="+",
-    #             linestyle='None',
-    #             markersize=5, label="L2")
-    # ax.set_ylabel(r"$\sigma_{k} / \sigma_{0}$")
-    #
-    # ax.set_xlabel(r"Num. of singular vals.")
-    # ax.set_title(rf"$n_\mathrm{{opt}} = {id}$")
-    # ax.grid(True, linestyle='--', alpha=0.6)
-    # ax.legend()
-    #
-    # fig.tight_layout()
-    # plt.show()
-    # exit()
 
+
+    s_1 = np.linalg.svd(Q_trim, compute_uv=False)
+    s_2 = np.linalg.svd(T1Q1, compute_uv=False)
+    s_3 = np.linalg.svd(Q2, compute_uv=False)
+    s_4 = np.linalg.svd(Q3, compute_uv=False)
+    s_1 = s_1[:100]
+    s_2 = s_2[:100]
+    s_3 = s_3[:100]
+    s_4 = s_4[:100]
+
+    s_norm_1 = s_1 / s_1[0]  # normalize by largest singular value
+    s_norm_2 = s_2 / s_2[0]  # normalize by largest singular value
+    s_norm_3 = s_3 / s_3[0]  # normalize by largest singular value
+    s_norm_4 = s_4 / s_4[0]  # normalize by largest singular value
+
+    idx = np.arange(1, len(s_norm_1) + 1)
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.semilogy(idx, s_norm_1,
+                color="brown",
+                marker="+",
+                linestyle='None',
+                markersize=5, label=r"$Q$")
+    ax.semilogy(idx, s_norm_2,
+                color="red",
+                marker="+",
+                linestyle='None',
+                markersize=5, label=r"$Q_{nl}$")
+    ax.semilogy(idx, s_norm_3,
+                color="green",
+                marker="+",
+                linestyle='None',
+                markersize=5, label=r"$T^1Q^1$")
+    ax.semilogy(idx, s_norm_4,
+                color="magenta",
+                marker="+",
+                linestyle='None',
+                markersize=5, label=r"$T^2Q^2$")
+    ax.set_ylabel(r"$\sigma_{k} / \sigma_{0}$")
+
+    ax.set_xlabel(r"Num. of singular vals.")
+    ax.set_title(r"Singular value decay")
+    ax.grid(True, linestyle='--', alpha=0.6)
+    ax.legend()
+
+    fig.tight_layout()
+    plt.show()
 
     return [Q_trim, T1Q1, T2Q2, T3Q3, T4Q4, E, Q2, Q3, Q4, Qtilde]
 

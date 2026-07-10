@@ -2,6 +2,8 @@ import numpy as np
 import h5py
 import os
 
+import scipy
+
 
 class data_luminosity:
     def __init__(self, matlab_file) -> None:
@@ -68,5 +70,60 @@ class data_pressure:
         self.RA: float = 45.0  # Outer annulus radius
 
 
+
+class new_raw_data_pressure:
+    def __init__(self, matlab_file) -> None:
+        self.fs: int = matlab_file['D']['config'][0, 0]['sampleRate'][0, 0][0, 0]
+        self.t: np.ndarray = matlab_file['D']['time'][0, 0]['t'][0, 0][0]
+        self.pcb01: np.ndarray = matlab_file['D']['pcb01'][0, 0]['data'][0, 0][0]
+        self.pcb02: np.ndarray = matlab_file['D']['pcb02'][0, 0]['data'][0, 0][0]
+        self.pcb03: np.ndarray = matlab_file['D']['pcb03'][0, 0]['data'][0, 0][0]
+        self.pcb04: np.ndarray = matlab_file['D']['pcb04'][0, 0]['data'][0, 0][0]
+        self.pcb05: np.ndarray = matlab_file['D']['pcb05'][0, 0]['data'][0, 0][0]
+        self.pcb06: np.ndarray = matlab_file['D']['pcb06'][0, 0]['data'][0, 0][0]
+        self.pcb07: np.ndarray = matlab_file['D']['pcb07'][0, 0]['data'][0, 0][0]
+        self.pcb08: np.ndarray = matlab_file['D']['pcb08'][0, 0]['data'][0, 0][0]
+        self.pcb09: np.ndarray = matlab_file['D']['pcb09'][0, 0]['data'][0, 0][0]
+        self.pcb10: np.ndarray = matlab_file['D']['pcb10'][0, 0]['data'][0, 0][0]
+        self.pcb11: np.ndarray = matlab_file['D']['pcb11'][0, 0]['data'][0, 0][0]
+        self.pcb12: np.ndarray = matlab_file['D']['pcb12'][0, 0]['data'][0, 0][0]
+        self.pcb13: np.ndarray = matlab_file['D']['pcb13'][0, 0]['data'][0, 0][0]
+        self.pcb14: np.ndarray = matlab_file['D']['pcb14'][0, 0]['data'][0, 0][0]
+        self.pcb15: np.ndarray = matlab_file['D']['pcb15'][0, 0]['data'][0, 0][0]
+
+
+class new_processed_data_pressure:
+    def __init__(self, matlab_file) -> None:
+        self.windowed_data = matlab_file['D']['window'][0, 0]
+
+
+        self.t: np.ndarray = self.windowed_data['data'][0, 0]['time'][0, 0][0]
+        self.pcb01_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb01'][0, 0][0]
+        self.pcb02_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb02'][0, 0][0]
+        self.pcb03_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb03'][0, 0][0]
+        self.pcb04_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb04'][0, 0][0]
+        self.pcb05_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb05'][0, 0][0]
+        self.pcb06_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb06'][0, 0][0]
+        self.pcb07_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb07'][0, 0][0]
+        self.pcb08_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb08'][0, 0][0]
+        self.pcb09_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb09'][0, 0][0]
+        self.pcb10_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb10'][0, 0][0]
+        self.pcb11_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb11'][0, 0][0]
+        self.pcb12_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb12'][0, 0][0]
+        self.pcb13_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb13'][0, 0][0]
+        self.pcb14_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb14'][0, 0][0]
+        self.pcb15_cut: np.ndarray = self.windowed_data['data'][0, 0]['pcb15'][0, 0][0]
+
+
 def read_matlab(dir, variable, name):
     return h5py.File(os.path.join(dir, variable, name), 'r')
+
+
+def new_read_matlab(dir, folder, name):
+    path = os.path.join(dir, folder, name)
+    try:
+        # Try reading as HDF5 (v7.3)
+        return h5py.File(path, 'r')
+    except OSError:
+        # Fallback for v7 and below
+        return scipy.io.loadmat(path)
