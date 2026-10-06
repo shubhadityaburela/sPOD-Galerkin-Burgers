@@ -1,0 +1,18 @@
+name: spod-galerkin-burgers
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy
+  - scipy
+  - matplotlib
+  - scikit-learn
+  - joblib
+  - opt_einsum
+  - ipython
+  - notebook
+  - pip
+  - pip:
+      - tikzplotlib
+      - -e ./FOM/burgers1d
+      - -e ./ROM/burgers_rom

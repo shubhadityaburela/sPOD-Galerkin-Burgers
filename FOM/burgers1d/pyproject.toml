@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "burgers1d"
+version = "0.1.0"
+description = "Finite-volume solver for the 1D inviscid Burgers' equation"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.20",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.5"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+burgers1d = "burgers1d.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
